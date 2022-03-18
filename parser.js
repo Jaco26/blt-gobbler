@@ -3,6 +3,26 @@
  * A parser for BLT formatted text OpaVote election results
  * @see https://www.opavote.com/help/overview#blt-file-format 
  * 
+ * @returns {{
+ *    withdrawnCandidates: number[];
+ *    numberOfCandidates: number;
+ *    numberOfSeats: number;
+ *    ballots: {
+ *      weight: number;
+ *      rankings: {
+ *        rank: number;
+ *        candidates: number[];
+ *      }[];
+ *    }[];
+ *    candidates: {
+ *      [key: string]: {
+ *        name: string;
+ *        number: number;  
+ *      };
+ *    };
+ *    electionName: string;
+ * }}
+ * 
  * A ballot file contains the following information:
  * - The first line has two numbers indicating the number of candidates and the
  *   number of seats.
@@ -89,11 +109,11 @@ function parse(bltText) {
     .split(" ")
     .map(chars => Number(chars));
 
-
-  const withdrawnCandidates = /^(-\d+\s)*$/.test(theOtherLines[0])
-      ? theOtherLines
+  const withdrawnCandidates = /^(-\d+\s*)+$/.test(theOtherLines[0])
+      ? theOtherLines[0]
           .split(" ")
-          .map(chars => Number(chars.replace("-", "").trim()))
+          .filter(chars => chars.trim().length > 0)
+          .map(chars => Number(chars.trim().replace("-", "")))
       : [];
   
   if (withdrawnCandidates.legth > 0) {
@@ -111,7 +131,7 @@ function parse(bltText) {
 
   const electionName = theOtherLines[theOtherLines.length - 1];
 
-  const candidateMap = candidateLines.reduce(
+  const candidates = candidateLines.reduce(
     (accumulator, line, index) => {
       const candidate = {
         name: line,
@@ -140,13 +160,13 @@ function parse(bltText) {
         if (isTie(candidateRanking)) {
           const candidates = candidateRanking
             .split("=")
-            .map(candidate => Number(candidate))
-          return { rank, candidates }
+            .map(candidate => Number(candidate));
+          return { rank, candidates };
         }
         if (isSkip(candidateRanking)) {
-          return { rank, candidates: [] }
+          return { rank, candidates: [] };
         }
-        return { rank, candidates: [Number(candidateRanking)] }
+        return { rank, candidates: [Number(candidateRanking)] };
       });
   }
 
@@ -155,19 +175,17 @@ function parse(bltText) {
     const ballot = {
       weight: Number(weight),
       rankings: processRankings(candidateRankings),
-    }
-    return ballot
+    };
+    return ballot;
   });
 
   return {
     withdrawnCandidates,
     numberOfCandidates,
     numberOfSeats,
-    // electionName,
-    // ballotLines,
-    // candidateLines,
+    electionName,
     ballots,
-    candidateMap,
+    candidates,
   };
 }
 
@@ -190,14 +208,18 @@ function clearElement(elem) {
 }
 
 function onInput() {
+  clearElement(elemParserError);
+  clearElement(elemParserResults);
   try {
+    if (elemBltTextarea.value.trim().length === 0) {
+      return;
+    }
     const result = parse(elemBltTextarea.value);
     const elemPre = document.createElement("pre");
     elemPre.textContent = JSON.stringify(result, null, 2);
-    clearElement(elemParserResults);
     elemParserResults.appendChild(elemPre);
   } catch (error) {
-    clearElement(elemParserError);
+    console.error(error)
     elemParserError.textContent = "Oops! There was an error. Make sure your BLT text is properly formatted. If it is...sry 😬"
   }
 }
