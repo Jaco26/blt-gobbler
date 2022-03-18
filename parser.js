@@ -110,15 +110,11 @@ function parse(bltText) {
     .map(chars => Number(chars));
 
   const withdrawnCandidates = /^(-\d+\s*)+$/.test(theOtherLines[0])
-      ? theOtherLines[0]
+      ? theOtherLines.shift()
           .split(" ")
           .filter(chars => chars.trim().length > 0)
           .map(chars => Number(chars.trim().replace("-", "")))
       : [];
-  
-  if (withdrawnCandidates.legth > 0) {
-    theOtherLines.shift();
-  } 
 
   const indexOfEndOfBallots = theOtherLines.findIndex(line => line === "0");
 
@@ -144,38 +140,39 @@ function parse(bltText) {
   );
 
   function processRankings(candidateRankings) {
+    const isTie = ranking => /^\d+=\d+$/.test(ranking);
+    const isSkip = ranking => ranking === "-"
 
-    function isTie(ranking) {
-      return /^\d+=\d+$/.test(ranking)
-    }
+    return candidateRankings.map((ranking, index) => {
+      const rank = index + 1;
 
-    function isSkip(ranking) {
-      return ranking === "-"
-    }
+      if (isTie(ranking)) {
+        return {
+          rank,
+          candidates: ranking.split("=").map(candidate => Number(candidate)),
+        };
+      }
 
-    return candidateRankings
-      .splice(0, candidateRankings.length - 1)
-      .map((candidateRanking, index) => {
-        const rank = index + 1;
-        if (isTie(candidateRanking)) {
-          const candidates = candidateRanking
-            .split("=")
-            .map(candidate => Number(candidate));
-          return { rank, candidates };
-        }
-        if (isSkip(candidateRanking)) {
-          return { rank, candidates: [] };
-        }
-        return { rank, candidates: [Number(candidateRanking)] };
-      });
+      if (isSkip(ranking)) {
+        return { rank, candidates: [] };
+      }
+      
+      return { rank, candidates: [Number(ranking)] };
+    });
   }
 
   const ballots = ballotLines.map(line => {
-    const [weight, ...candidateRankings] = line.split(" ").map(chars => chars.trim());
+    const [weight, ...candidateRankings] = line
+      .split(" ")
+      .map(chars => chars.trim());
+
     const ballot = {
       weight: Number(weight),
-      rankings: processRankings(candidateRankings),
+      rankings: processRankings(
+        candidateRankings.slice(0, candidateRankings.length - 1)
+      ),
     };
+
     return ballot;
   });
 
@@ -189,9 +186,11 @@ function parse(bltText) {
   };
 }
 
-function doScottishSTVCount({ candidates, ballots } ) {
+
+function doScottishSTVCount({  }) {
 
 }
+
 
 const elemBltTextarea = document.querySelector(".blt-textarea");
 const elemParserResults = document.querySelector(".blt-parser-results");
